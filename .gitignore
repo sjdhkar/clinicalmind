@@ -1,0 +1,62 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+publish/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+dist/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.pyc
+.env
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+*.js.map
+
+# HuggingFace model cache (large files)
+.cache/
+services/hf-inference/.cache/
+
+# Docker
+.docker/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Secrets
+*.env
+.env.*
+!.env.example
+**/secrets/
+*.pem
+*.key
+*.pfx
+
+# Logs
+*.log
+logs/
+
+# Eval outputs (committed selectively)
+packages/clinical-eval/results/*.json
+!packages/clinical-eval/results/.gitkeep
+
+# Terraform / Bicep generated
+infra/.terraform/
+infra/terraform.tfstate*

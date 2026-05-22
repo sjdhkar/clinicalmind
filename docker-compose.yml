@@ -1,0 +1,119 @@
+name: clinicalmind
+
+services:
+
+  # ─── PostgreSQL with pgvector ────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: clinicalmind
+      POSTGRES_USER: clinicalmind
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinicalmind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis ───────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─── HuggingFace Inference Sidecar ───────────────────────────
+  hf-inference:
+    build:
+      context: ./services/hf-inference
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      HF_HOME: /app/.cache
+      MODEL_CACHE_DIR: /app/.cache/models
+    volumes:
+      - hf_model_cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s  # models take time to load
+
+  # ─── Python AI Orchestrator ──────────────────────────────────
+  ai-orchestrator:
+    build:
+      context: ./services/ai-orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://clinicalmind:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/clinicalmind
+      REDIS_URL: redis://redis:6379
+      HF_INFERENCE_URL: http://hf-inference:8001
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hf-inference:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── .NET API Gateway ────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./apps/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ConnectionStrings__Default: "Host=postgres;Database=clinicalmind;Username=clinicalmind;Password=${POSTGRES_PASSWORD:-dev_password_change_me}"
+      Redis__ConnectionString: "redis:6379"
+      AiOrchestrator__BaseUrl: "http://ai-orchestrator:8000"
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-orchestrator:
+        condition: service_healthy
+
+  # ─── Angular Frontend (dev server) ───────────────────────────
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./apps/web/src:/app/src   # hot reload
+    environment:
+      API_URL: http://api-gateway:8080
+
+volumes:
+  postgres_data:
+  redis_data:
+  hf_model_cache:

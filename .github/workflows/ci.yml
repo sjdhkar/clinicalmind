@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── .NET Gateway ────────────────────────────────────────────
+  gateway-build:
+    name: .NET Gateway — build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+      - run: dotnet restore
+      - run: dotnet build --no-restore --configuration Release
+      - run: dotnet test --no-build --configuration Release --verbosity normal
+
+  # ─── Python AI Orchestrator ──────────────────────────────────
+  ai-orchestrator-build:
+    name: Python AI service — lint & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai-orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install uv
+      - run: uv sync --dev
+      - run: uv run ruff check .
+      - run: uv run mypy src/
+      - run: uv run pytest tests/unit/ -v --tb=short
+
+  # ─── Angular Frontend ────────────────────────────────────────
+  web-build:
+    name: Angular — build & lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build -- --configuration production
+
+  # ─── Integration tests (docker-compose) ─────────────────────
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: [gateway-build, ai-orchestrator-build]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.test.yml up -d --wait
+      - name: Run integration tests
+        run: |
+          cd packages/clinical-eval
+          pip install uv && uv sync
+          uv run pytest tests/integration/ -v --tb=short
+      - run: docker compose -f docker-compose.test.yml down
+
+  # ─── RAGAS Evaluation gate ───────────────────────────────────
+  eval-gate:
+    name: RAGAS evaluation gate
+    runs-on: ubuntu-latest
+    needs: [integration]
+    if: github.event_name == 'pull_request'
+    env:
+      AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
+      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install uv
+      - run: uv sync
+        working-directory: packages/clinical-eval
+      - name: Run RAGAS evaluation on golden set
+        working-directory: packages/clinical-eval
+        run: uv run python run_eval.py --golden-set data/golden_set_200.json --output results/latest.json
+      - name: Check evaluation thresholds
+        working-directory: packages/clinical-eval
+        run: uv run python check_thresholds.py --results results/latest.json
+      - name: Upload eval results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.sha }}
+          path: packages/clinical-eval/results/latest.json

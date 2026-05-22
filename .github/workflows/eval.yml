@@ -1,0 +1,41 @@
+name: Eval
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # nightly at 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  nightly-eval:
+    name: Nightly RAGAS evaluation
+    runs-on: ubuntu-latest
+    env:
+      AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
+      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install uv
+      - run: uv sync
+        working-directory: packages/clinical-eval
+      - name: Run full evaluation suite
+        working-directory: packages/clinical-eval
+        run: |
+          uv run python run_eval.py \
+            --golden-set data/golden_set_200.json \
+            --output results/$(date +%Y-%m-%d).json \
+            --upload-langfuse
+      - name: Update eval results index
+        working-directory: packages/clinical-eval
+        run: uv run python update_results_index.py
+      - name: Commit updated results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/eval-results/
+          git diff --staged --quiet || git commit -m "chore: nightly eval results $(date +%Y-%m-%d)"
+          git push
