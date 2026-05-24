@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ClinicalMind.Gateway</RootNamespace>
+    <AssemblyName>ClinicalMind.Gateway</AssemblyName>
+    <UserSecretsId>clinicalmind-gateway-dev</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MediatR for CQRS -->
+    <PackageReference Include="MediatR" Version="12.*" />
+
+    <!-- Semantic Kernel for LLM abstraction (gateway layer) -->
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.*" />
+
+    <!-- Redis (rate limiting + caching) -->
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+
+    <!-- PostgreSQL + EF Core (audit log) -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.*" />
+
+    <!-- Auth -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+
+    <!-- Observability -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.*" />
+
+    <!-- API -->
+    <PackageReference Include="Scalar.AspNetCore" Version="1.*" />
+  </ItemGroup>
+
+</Project>

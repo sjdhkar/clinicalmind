@@ -1,0 +1,162 @@
+[
+  {
+    "id": "vitals-001",
+    "category": "vitals_analysis",
+    "question": "What was the patient's SpO2 trend over the last 6 hours?",
+    "context": "Observation at 08:00: SpO2 96%. Observation at 10:00: SpO2 95%. Observation at 12:00: SpO2 93%. Observation at 14:00: SpO2 91%. All values documented by nursing staff.",
+    "ground_truth": "The patient's SpO2 has shown a declining trend over the last 6 hours, falling from 96% at 08:00 to 91% at 14:00 — a drop of 5 percentage points. An SpO2 of 91% is below the normal threshold and warrants clinical review.",
+    "news2_relevant": true
+  },
+  {
+    "id": "vitals-002",
+    "category": "vitals_analysis",
+    "question": "Is the heart rate within normal range?",
+    "context": "Heart rate recorded at 14:32: 112 bpm. Previous reading at 12:00: 98 bpm. Patient is afebrile.",
+    "ground_truth": "The patient's heart rate is 112 bpm, which is elevated above the normal range of 60–100 bpm. This represents an increase from 98 bpm two hours earlier. A heart rate of 101–110 bpm scores 1 point on NEWS2.",
+    "news2_relevant": true
+  },
+  {
+    "id": "notes-001",
+    "category": "note_summary",
+    "question": "What medications were administered in the last 24 hours?",
+    "context": "Nursing note 08:15: Administered paracetamol 1g IV as prescribed. Nursing note 12:30: Metformin 500mg oral given with lunch. Nursing note 20:00: Enoxaparin 40mg subcutaneous injection given per DVT prophylaxis protocol.",
+    "ground_truth": "Three medications were administered in the last 24 hours: paracetamol 1g IV at 08:15, metformin 500mg oral at 12:30, and enoxaparin 40mg subcutaneously at 20:00 for DVT prophylaxis.",
+    "news2_relevant": false
+  },
+  {
+    "id": "notes-002",
+    "category": "note_summary",
+    "question": "Has the patient reported any pain?",
+    "context": "Nursing note 10:00: Patient reports pain score 7/10 in right lower quadrant. Nursing note 14:00: Following analgesia, patient reports pain score reduced to 3/10. Patient appears comfortable.",
+    "ground_truth": "Yes. The patient reported right lower quadrant pain scoring 7/10 at 10:00. Following analgesia administration, pain reduced to 3/10 by 14:00, and the patient appeared comfortable.",
+    "news2_relevant": false
+  },
+  {
+    "id": "deterioration-001",
+    "category": "deterioration_risk",
+    "question": "What is the patient's current NEWS2 score?",
+    "context": "Current observations: Respiratory rate 22/min, SpO2 93%, Systolic BP 105 mmHg, Heart rate 108 bpm, Consciousness: Alert, Temperature 38.2°C.",
+    "ground_truth": "Based on the current observations, the patient's NEWS2 score is 7: respiratory rate 22/min scores 2, SpO2 93% scores 2, systolic BP 105 mmHg scores 1, heart rate 108 bpm scores 1, temperature 38.2°C scores 1. A score of 7 indicates high clinical risk and requires urgent medical review.",
+    "news2_relevant": true
+  },
+  {
+    "id": "deterioration-002",
+    "category": "deterioration_risk",
+    "question": "Should this patient be escalated?",
+    "context": "NEWS2 score calculated as 8. Patient's consciousness has changed from Alert to Confused in the last 2 hours. Nursing note: patient increasingly agitated.",
+    "ground_truth": "Yes. A NEWS2 score of 8 combined with a change in consciousness from Alert to Confused represents a high-risk clinical picture requiring immediate medical escalation. Confusion scores 3 points on NEWS2 (ACVPU score of C). Urgent medical review is indicated.",
+    "news2_relevant": true
+  },
+  {
+    "id": "evidence-001",
+    "category": "evidence_lookup",
+    "question": "What is the recommended fluid resuscitation volume for sepsis?",
+    "context": "NICE Guideline NG51 (Sepsis: recognition, diagnosis and early management): Administer a fluid challenge of 500ml crystalloid over 15 minutes for adults with suspected sepsis and hypoperfusion. Reassess after each bolus.",
+    "ground_truth": "Per NICE Guideline NG51, the recommended initial fluid challenge for adults with suspected sepsis and signs of hypoperfusion is 500ml of crystalloid administered over 15 minutes, with reassessment after each bolus.",
+    "news2_relevant": false
+  },
+  {
+    "id": "evidence-002",
+    "category": "evidence_lookup",
+    "question": "What blood cultures should be taken before antibiotics?",
+    "context": "NICE Guideline NG51: Take at least 2 sets of blood cultures (aerobic and anaerobic) before administering antibiotics in patients with suspected sepsis, provided this does not delay antibiotic administration by more than 45 minutes.",
+    "ground_truth": "At least 2 sets of blood cultures (both aerobic and anaerobic) should be taken before antibiotic administration. However, per NICE NG51, this should not delay antibiotics by more than 45 minutes.",
+    "news2_relevant": false
+  },
+  {
+    "id": "insufficient-001",
+    "category": "insufficient_data",
+    "question": "What was the patient's creatinine level last week?",
+    "context": "Current lab results from today: Creatinine 118 umol/L, eGFR 58 ml/min. No previous lab results available in the provided records.",
+    "ground_truth": "Insufficient data in the available records to answer this question. Only today's creatinine (118 umol/L) is available. Historical values from last week are not present in the provided records.",
+    "news2_relevant": false
+  },
+  {
+    "id": "vitals-003",
+    "category": "vitals_analysis",
+    "question": "What is the respiratory rate and is it concerning?",
+    "context": "Respiratory rate recorded at 15:00: 24 breaths per minute. Previous readings: 18/min at 09:00, 20/min at 12:00, 24/min at 15:00.",
+    "ground_truth": "The patient's respiratory rate is 24 breaths per minute, which is elevated. It has increased from 18/min at 09:00 to 24/min at 15:00. A respiratory rate of 21–24/min scores 2 on NEWS2 and represents a clinically significant trend that warrants increased monitoring.",
+    "news2_relevant": true
+  },
+  {
+    "id": "notes-003",
+    "category": "note_summary",
+    "question": "What is the patient's fluid balance?",
+    "context": "Fluid balance chart: Inputs — IV fluids 1000ml, oral intake 350ml. Outputs — Urine 600ml, drain 120ml. Net balance for 24 hours: +630ml.",
+    "ground_truth": "The patient has a positive fluid balance of +630ml over 24 hours. Total input was 1350ml (1000ml IV fluids, 350ml oral) and total output was 720ml (600ml urine, 120ml drain output).",
+    "news2_relevant": false
+  },
+  {
+    "id": "deterioration-003",
+    "category": "deterioration_risk",
+    "question": "What NEWS2 score warrants a blue light call?",
+    "context": "NEWS2 protocol: Score 0-4: Low risk — minimum 12-hourly monitoring. Score 5-6: Medium risk — increase monitoring to minimum 4-hourly, consider medical review. Score 7+: High risk — continuous monitoring, urgent medical review. Score 7+ with single parameter scoring 3: Consider emergency response.",
+    "ground_truth": "Per the NEWS2 protocol, a score of 7 or above warrants urgent medical review with continuous monitoring. A score of 7 or above combined with any single parameter scoring 3 should trigger consideration of an emergency response (blue light call).",
+    "news2_relevant": true
+  },
+  {
+    "id": "vitals-004",
+    "category": "vitals_analysis",
+    "question": "What was the blood pressure at the last recording?",
+    "context": "Blood pressure observation at 16:00: 88/54 mmHg. Previous reading at 14:00: 102/68 mmHg. Patient is currently on IV fluids.",
+    "ground_truth": "The most recent blood pressure recording at 16:00 was 88/54 mmHg systolic/diastolic. This represents a significant drop from 102/68 mmHg at 14:00. A systolic BP of 88 mmHg scores 3 on NEWS2 (≤90 mmHg threshold) and indicates potential haemodynamic compromise requiring urgent review.",
+    "news2_relevant": true
+  },
+  {
+    "id": "evidence-003",
+    "category": "evidence_lookup",
+    "question": "What is the target SpO2 for COPD patients on oxygen therapy?",
+    "context": "BTS Guideline on Emergency Oxygen Use in Adults: For patients with COPD or risk of hypercapnia, target SpO2 of 88-92% is recommended. For all other acutely ill patients, target SpO2 of 94-98%.",
+    "ground_truth": "For COPD patients (or those at risk of hypercapnia), the BTS guideline recommends a target SpO2 of 88–92%. This differs from the standard target of 94–98% used for other acutely ill patients, as higher oxygen levels may suppress hypoxic drive in COPD.",
+    "news2_relevant": false
+  },
+  {
+    "id": "notes-004",
+    "category": "note_summary",
+    "question": "Has the patient been reviewed by a doctor today?",
+    "context": "Nursing note 09:00: Night handover completed. No medical review overnight. Nursing note 11:30: Dr Ahmed reviewed patient on ward round. Plan documented: continue current medications, repeat bloods tomorrow.",
+    "ground_truth": "Yes. Dr Ahmed reviewed the patient on the ward round at 11:30. The documented plan is to continue current medications and repeat bloods tomorrow. There was no medical review overnight.",
+    "news2_relevant": false
+  },
+  {
+    "id": "vitals-005",
+    "category": "vitals_analysis",
+    "question": "What is the temperature and does it indicate infection?",
+    "context": "Temperature at 14:00: 38.9°C. Previous reading at 10:00: 38.1°C. Patient reports feeling hot. Blood cultures taken at 13:30.",
+    "ground_truth": "The patient's temperature is 38.9°C, which represents a fever. It has risen from 38.1°C at 10:00, suggesting a worsening trend. A temperature of 38.1–39.0°C scores 1 on NEWS2. Blood cultures have already been taken, which is appropriate given the fever. The clinical picture is consistent with infection though the specific source requires further investigation.",
+    "news2_relevant": true
+  },
+  {
+    "id": "insufficient-002",
+    "category": "insufficient_data",
+    "question": "What is the patient's weight?",
+    "context": "Admission assessment: Height 172cm. No weight documented. BMI not calculated.",
+    "ground_truth": "Insufficient data in the available records to answer this question. The patient's height (172cm) is documented but no weight measurement is recorded. BMI has not been calculated.",
+    "news2_relevant": false
+  },
+  {
+    "id": "deterioration-004",
+    "category": "deterioration_risk",
+    "question": "What is the clinical risk level based on the current observations?",
+    "context": "Current observations: RR 19/min, SpO2 97%, BP 122/78 mmHg, HR 82 bpm, Temp 37.1°C, Consciousness: Alert. NEWS2 calculated: 0.",
+    "ground_truth": "The current observations indicate low clinical risk. The NEWS2 score is 0, with all parameters within normal ranges: respiratory rate 19/min, SpO2 97%, systolic BP 122 mmHg, heart rate 82 bpm, temperature 37.1°C, and the patient is alert. Routine monitoring is appropriate.",
+    "news2_relevant": true
+  },
+  {
+    "id": "notes-005",
+    "category": "note_summary",
+    "question": "Is there any allergy documented?",
+    "context": "Admission nursing assessment: Allergies — Penicillin (causes anaphylaxis, documented reaction 2019). No other known drug allergies. Environmental allergies: pollen (mild hay fever, not clinically significant).",
+    "ground_truth": "Yes. The patient has a documented penicillin allergy causing anaphylaxis, with a documented reaction in 2019. This is a severe allergy that must be clearly communicated to the prescribing team. No other drug allergies are documented.",
+    "news2_relevant": false
+  },
+  {
+    "id": "evidence-004",
+    "category": "evidence_lookup",
+    "question": "What is the first-line antibiotic for community-acquired pneumonia?",
+    "context": "NICE Guideline NG138 (Pneumonia in adults): For low-severity CAP managed in hospital, amoxicillin 500mg three times daily orally for 5 days is recommended as first-line. For patients with penicillin allergy, doxycycline 200mg on day 1 then 100mg daily or clarithromycin 500mg twice daily.",
+    "ground_truth": "Per NICE Guideline NG138, the first-line antibiotic for low-severity community-acquired pneumonia in hospitalised adults is amoxicillin 500mg three times daily orally for 5 days. For patients with penicillin allergy, doxycycline or clarithromycin are the recommended alternatives.",
+    "news2_relevant": false
+  }
+]

@@ -1,0 +1,95 @@
+name: clinicalmind-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: clinicalmind_test
+      POSTGRES_USER: clinicalmind
+      POSTGRES_PASSWORD: test_password
+    volumes:
+      - ./infra/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinicalmind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # HF inference in stub mode — returns mock responses, no model loading
+  hf-inference:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install fastapi uvicorn -q &&
+             python -c \"
+import json
+from fastapi import FastAPI
+import uvicorn
+app = FastAPI()
+
+@app.get('/health')
+def health(): return {'status': 'ok', 'models_loaded': {k: True for k in ['ner','timeseries','table_qa','reranker','nli','embeddings']}}
+
+@app.post('/ner')
+def ner(req: dict): return {'entities': [], 'entity_count': 0, 'model_id': 'mock'}
+
+@app.post('/embed/query')
+def embed_query(req: dict): return {'embedding': [0.1]*384, 'dimension': 384, 'model_id': 'mock'}
+
+@app.post('/embed/texts')
+def embed_texts(req: dict): return {'embeddings': [[0.1]*384 for _ in req.get('texts',[])], 'dimension': 384, 'count': len(req.get('texts',[])), 'model_id': 'mock'}
+
+@app.post('/rerank')
+def rerank(req: dict): return {'results': [{'passage': p, 'score': 0.9-i*0.1, 'rank': i+1, 'original_index': i} for i,p in enumerate(req.get('passages',[])[:req.get('top_k',5)])], 'model_id': 'mock'}
+
+@app.post('/nli')
+def nli(req: dict): return {'entailment_score': 0.85, 'neutral_score': 0.10, 'contradiction_score': 0.05, 'verdict': 'pass', 'predicted_label': 'entailment'}
+
+@app.post('/timeseries')
+def ts(req: dict): vals=req.get('values',[]); return {'mean': vals[-3:], 'low': [v-1 for v in vals[-3:]], 'high': [v+1 for v in vals[-3:]], 'anomaly_score': 0.2, 'anomaly_detected': False, 'prediction_length': 3, 'model_id': 'mock'}
+
+uvicorn.run(app, host='0.0.0.0', port=8001)
+\""
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  ai-orchestrator:
+    build:
+      context: ./services/ai-orchestrator
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://clinicalmind:test_password@postgres:5432/clinicalmind_test
+      REDIS_URL: redis://redis:6379
+      HF_INFERENCE_URL: http://hf-inference:8001
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
+      LOG_LEVEL: warning
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hf-inference:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
