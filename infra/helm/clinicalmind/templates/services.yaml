@@ -1,0 +1,158 @@
+{{/* Services */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-ai-orchestrator
+spec:
+  selector:
+    app: ai-orchestrator
+    release: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.aiOrchestrator.service.port }}
+      targetPort: {{ .Values.aiOrchestrator.service.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-api-gateway
+spec:
+  type: {{ .Values.apiGateway.service.type }}
+  selector:
+    app: api-gateway
+    release: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.apiGateway.service.port }}
+      targetPort: {{ .Values.apiGateway.service.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-hf-inference
+spec:
+  selector:
+    app: hf-inference
+    release: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.hfInference.service.port }}
+      targetPort: {{ .Values.hfInference.service.port }}
+---
+{{/* HPA — AI Orchestrator */}}
+{{- if .Values.aiOrchestrator.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-ai-orchestrator-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-ai-orchestrator
+  minReplicas: {{ .Values.aiOrchestrator.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.aiOrchestrator.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.aiOrchestrator.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+---
+{{/* HPA — API Gateway */}}
+{{- if .Values.apiGateway.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-api-gateway-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-api-gateway
+  minReplicas: {{ .Values.apiGateway.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.apiGateway.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.apiGateway.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+---
+{{/* Ingress */}}
+{{- if .Values.apiGateway.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"    # SSE streams
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"       # required for SSE
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: {{ .Values.apiGateway.ingress.className }}
+  {{- if .Values.apiGateway.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.apiGateway.ingress.host }}
+      secretName: {{ .Release.Name }}-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.apiGateway.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-api-gateway
+                port:
+                  number: {{ .Values.apiGateway.service.port }}
+{{- end }}
+---
+{{/* PVC for HuggingFace model cache — prevents re-downloading on pod restart */}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-model-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-premium    # Azure Premium SSD
+  resources:
+    requests:
+      storage: 20Gi    # ~15GB for all 6 HF models
+---
+{{/* Azure Key Vault SecretProviderClass — injects secrets as K8s Secret */}}
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: {{ .Release.Name }}-akv-secrets
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    clientID: {{ .Values.secrets.clientId | quote }}
+    keyvaultName: {{ .Values.secrets.keyVaultName | quote }}
+    tenantId: {{ .Values.secrets.tenantId | quote }}
+    objects: |
+      array:
+        {{- range .Values.secrets.secretObjects }}
+        {{- range .data }}
+        - |
+          objectName: {{ .objectName }}
+          objectType: secret
+        {{- end }}
+        {{- end }}
+  secretObjects:
+    {{- range .Values.secrets.secretObjects }}
+    - secretName: {{ .secretName }}
+      type: {{ .type }}
+      data:
+        {{- range .data }}
+        - objectName: {{ .objectName }}
+          key: {{ .key }}
+        {{- end }}
+    {{- end }}

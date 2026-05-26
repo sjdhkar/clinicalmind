@@ -1,0 +1,119 @@
+# ClinicalMind Helm values
+# Override per environment:
+#   helm upgrade clinicalmind ./infra/helm/clinicalmind -f values.prod.yaml
+
+global:
+  imageRegistry: "acrcmdev.azurecr.io"
+  imagePullPolicy: IfNotPresent
+  environment: dev
+
+# ── HF Inference Sidecar ──────────────────────────────────────
+hfInference:
+  enabled: true
+  image:
+    repository: clinicalmind/hf-inference
+    tag: latest
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "4Gi"      # models need memory
+    limits:
+      cpu: "2000m"
+      memory: "8Gi"
+  nodeSelector: {}       # in prod: set to GPU node label
+  tolerations: []        # in prod: nvidia.com/gpu taint
+  env:
+    preloadModels: "false"
+    logLevel: "info"
+  service:
+    port: 8001
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8001
+    initialDelaySeconds: 120    # models take time to load
+    periodSeconds: 30
+
+# ── AI Orchestrator ───────────────────────────────────────────
+aiOrchestrator:
+  enabled: true
+  image:
+    repository: clinicalmind/ai-orchestrator
+    tag: latest
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  env:
+    logLevel: "info"
+    langfuseEnabled: "false"
+  service:
+    port: 8000
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+# ── API Gateway ───────────────────────────────────────────────
+apiGateway:
+  enabled: true
+  image:
+    repository: clinicalmind/api-gateway
+    tag: latest
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    host: "clinicalmind.yourdomain.com"
+    tls: true
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+# ── Secrets (pulled from Azure Key Vault via CSI driver) ──────
+secrets:
+  keyVaultName: "kv-cm-dev"
+  tenantId: ""             # set in deployment
+  clientId: ""             # workload identity client ID
+  secretObjects:
+    - secretName: clinicalmind-secrets
+      type: Opaque
+      data:
+        - objectName: postgres-connection-string
+          key: DATABASE_URL
+        - objectName: redis-connection-string
+          key: REDIS_URL
+        - objectName: azure-openai-key
+          key: AZURE_OPENAI_KEY
+        - objectName: azure-openai-endpoint
+          key: AZURE_OPENAI_ENDPOINT

@@ -1,0 +1,130 @@
+{{/* AI Orchestrator Deployment */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-ai-orchestrator
+  labels:
+    app: ai-orchestrator
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.aiOrchestrator.replicaCount }}
+  selector:
+    matchLabels:
+      app: ai-orchestrator
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: ai-orchestrator
+        release: {{ .Release.Name }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: ai-orchestrator
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.aiOrchestrator.image.repository }}:{{ .Values.aiOrchestrator.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.aiOrchestrator.service.port }}
+          envFrom:
+            - secretRef:
+                name: clinicalmind-secrets
+          env:
+            - name: HF_INFERENCE_URL
+              value: "http://{{ .Release.Name }}-hf-inference:{{ .Values.hfInference.service.port }}"
+            - name: LOG_LEVEL
+              value: {{ .Values.aiOrchestrator.env.logLevel | quote }}
+            - name: LANGFUSE_ENABLED
+              value: {{ .Values.aiOrchestrator.env.langfuseEnabled | quote }}
+          resources: {{- toYaml .Values.aiOrchestrator.resources | nindent 12 }}
+          livenessProbe: {{- toYaml .Values.aiOrchestrator.livenessProbe | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.aiOrchestrator.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+{{/* API Gateway Deployment */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api-gateway
+  labels:
+    app: api-gateway
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.apiGateway.replicaCount }}
+  selector:
+    matchLabels:
+      app: api-gateway
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: api-gateway
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.apiGateway.image.repository }}:{{ .Values.apiGateway.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.apiGateway.service.port }}
+          envFrom:
+            - secretRef:
+                name: clinicalmind-secrets
+          env:
+            - name: AiOrchestrator__BaseUrl
+              value: "http://{{ .Release.Name }}-ai-orchestrator:{{ .Values.aiOrchestrator.service.port }}"
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+          resources: {{- toYaml .Values.apiGateway.resources | nindent 12 }}
+          livenessProbe: {{- toYaml .Values.apiGateway.livenessProbe | nindent 12 }}
+---
+{{/* HF Inference Deployment */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-hf-inference
+  labels:
+    app: hf-inference
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.hfInference.replicaCount }}
+  selector:
+    matchLabels:
+      app: hf-inference
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: hf-inference
+        release: {{ .Release.Name }}
+    spec:
+      {{- with .Values.hfInference.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hfInference.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-model-cache
+      containers:
+        - name: hf-inference
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.hfInference.image.repository }}:{{ .Values.hfInference.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.hfInference.service.port }}
+          env:
+            - name: PRELOAD_MODELS
+              value: {{ .Values.hfInference.env.preloadModels | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.hfInference.env.logLevel | quote }}
+          volumeMounts:
+            - name: model-cache
+              mountPath: /app/.cache
+          resources: {{- toYaml .Values.hfInference.resources | nindent 12 }}
+          livenessProbe: {{- toYaml .Values.hfInference.livenessProbe | nindent 12 }}
