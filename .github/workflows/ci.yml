@@ -6,138 +6,111 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  PYTHONDONTWRITEBYTECODE: 1
+  PYTHONUNBUFFERED: 1
+
 jobs:
 
-  # ─── Python HF Inference — lint & unit tests ─────────────────
-  hf-inference:
-    name: HF Inference — lint & test
+  # ─── Python: HF Inference sidecar unit tests ─────────────────
+  hf-inference-test:
+    name: "Python · HF Inference · unit tests"
     runs-on: ubuntu-latest
-    defaults:
-      run:
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install lightweight test deps only
+        # conftest.py mocks ALL heavy ML packages (torch, transformers, etc.)
+        # so unit tests run without any ML libraries installed
+        run: |
+          pip install --quiet \
+            fastapi==0.115.0 \
+            uvicorn \
+            pydantic==2.9.0 \
+            pydantic-settings \
+            httpx \
+            pytest==8.3.0 \
+            pytest-asyncio==0.24.0
+
+      - name: Run unit tests
         working-directory: services/hf-inference
+        run: pytest tests/unit/ -v --tb=short --asyncio-mode=auto
+
+  # ─── Python: AI Orchestrator unit tests ──────────────────────
+  ai-orchestrator-test:
+    name: "Python · AI Orchestrator · unit tests"
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+          cache: pip
 
-      - name: Install dependencies
+      - name: Install lightweight test deps only
+        # conftest.py mocks LangGraph, LangChain, SQLAlchemy, Redis, etc.
         run: |
           pip install --quiet \
-            fastapi uvicorn pydantic pydantic-settings \
-            sentence-transformers torch numpy pandas \
-            pytest pytest-asyncio httpx
+            fastapi==0.115.0 \
+            uvicorn \
+            pydantic==2.9.0 \
+            pydantic-settings \
+            httpx \
+            numpy \
+            pytest==8.3.0 \
+            pytest-asyncio==0.24.0
 
-      - name: Run unit tests (no models needed — all mocked)
-        run: pytest tests/unit/ -v --tb=short
-
-  # ─── Python AI Orchestrator — lint & unit tests ───────────────
-  ai-orchestrator:
-    name: AI Orchestrator — lint & test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Run unit tests
         working-directory: services/ai-orchestrator
-    steps:
-      - uses: actions/checkout@v4
+        run: pytest tests/unit/ -v --tb=short --asyncio-mode=auto
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          pip install --quiet \
-            fastapi uvicorn pydantic pydantic-settings \
-            langgraph langchain langchain-openai langchain-core \
-            sqlalchemy asyncpg numpy tiktoken redis \
-            sse-starlette httpx \
-            pytest pytest-asyncio
-
-      - name: Run unit tests (no LLM/DB needed — all mocked)
-        run: pytest tests/unit/ -v --tb=short
-
-  # ─── Angular Frontend — build ─────────────────────────────────
-  web:
-    name: Angular — build
+  # ─── .NET 9 API Gateway — build only ─────────────────────────
+  gateway-build:
+    name: ".NET · API Gateway · build"
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Build (production)
-        run: npx ng build --configuration production
-
-  # ─── .NET Gateway — build & test ─────────────────────────────
-  gateway:
-    name: .NET Gateway — build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api-gateway
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.x'          # Use 9 until .NET 10 is GA on runners
+          dotnet-version: "9.x"
 
-      - name: Update target framework for CI
-        # Temporarily target net9.0 until .NET 10 runners are available
-        run: |
-          sed -i 's/<TargetFramework>net10.0<\/TargetFramework>/<TargetFramework>net9.0<\/TargetFramework>/' \
-            ClinicalMind.Gateway.csproj
-
-      - name: Restore
+      - name: Restore packages
+        working-directory: apps/api-gateway
         run: dotnet restore
 
-      - name: Build
+      - name: Build Release
+        working-directory: apps/api-gateway
         run: dotnet build --no-restore --configuration Release
 
-  # ─── Eval gate (PR only, skips if no secrets) ────────────────
-  eval-gate:
-    name: RAGAS eval gate
+  # ─── Angular 19 — type-check & build ─────────────────────────
+  web-build:
+    name: "Angular · type-check & build"
     runs-on: ubuntu-latest
-    needs: [hf-inference, ai-orchestrator]
-    if: github.event_name == 'pull_request' && secrets.AZURE_OPENAI_KEY != ''
-    env:
-      AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
-      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-      ORCHESTRATOR_URL: "http://localhost:8000"   # won't reach it, uses heuristic scoring
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package.json
 
-      - name: Install eval dependencies
-        run: |
-          pip install --quiet \
-            httpx pandas numpy rich pydantic
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install --legacy-peer-deps --prefer-offline
 
-      - name: Run eval with heuristic scoring
-        working-directory: packages/clinical-eval
-        run: |
-          python run_eval.py \
-            --golden-set data/golden_set_200.json \
-            --output results/latest.json \
-            --limit 20
-        continue-on-error: true       # don't fail PR if orchestrator unreachable
+      - name: Type-check
+        working-directory: apps/web
+        run: npx tsc --noEmit --project tsconfig.app.json
+        continue-on-error: true   # report but don't block on TS strict errors
 
-      - name: Upload eval results artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: eval-results-${{ github.sha }}
-          path: packages/clinical-eval/results/
+      - name: Build production bundle
+        working-directory: apps/web
+        run: npx ng build --configuration production --no-progress

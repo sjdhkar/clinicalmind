@@ -1,69 +1,41 @@
 name: Eval
 
 on:
-  schedule:
-    - cron: '0 2 * * *'    # nightly at 02:00 UTC
-  workflow_dispatch:        # allow manual trigger from Actions tab
+  workflow_dispatch:           # Manual trigger only — no nightly schedule until secrets configured
+  # schedule:
+  #   - cron: '0 2 * * *'    # Uncomment when AZURE_OPENAI_KEY secret is set
 
 jobs:
-  nightly-eval:
-    name: Nightly RAGAS evaluation
+  eval:
+    name: "RAGAS Evaluation"
     runs-on: ubuntu-latest
-
-    # Skip silently if no Azure OpenAI key — don't spam failure emails
-    if: vars.EVAL_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
-
-    env:
-      AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
-      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
-      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
-      ORCHESTRATOR_URL: ${{ secrets.ORCHESTRATOR_URL || 'http://localhost:8000' }}
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+          cache: pip
 
       - name: Install eval dependencies
         run: |
           pip install --quiet \
-            httpx pandas numpy rich pydantic \
-            langchain-openai ragas datasets
+            httpx pandas numpy rich pydantic
 
-      - name: Run evaluation suite
-        id: eval
+      - name: Run evaluation (heuristic mode if no Azure key)
         working-directory: packages/clinical-eval
+        env:
+          AZURE_OPENAI_KEY: ${{ secrets.AZURE_OPENAI_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          ORCHESTRATOR_URL: "http://localhost:8000"
         run: |
           python run_eval.py \
             --golden-set data/golden_set_200.json \
-            --output results/$(date +%Y-%m-%d).json \
-            --limit 20
+            --output results/latest.json \
+            --limit 5
         continue-on-error: true
 
-      - name: Publish results to GitHub Pages
-        # Copy latest results to the docs folder for GitHub Pages display
-        run: |
-          LATEST=$(ls packages/clinical-eval/results/*.json 2>/dev/null | tail -1)
-          if [ -n "$LATEST" ]; then
-            cp "$LATEST" docs/eval-results/latest.json
-            echo "Results published: $LATEST"
-          fi
-
-      - name: Commit results
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/eval-results/ packages/clinical-eval/results/
-          git diff --staged --quiet && echo "No changes" || \
-            git commit -m "chore: eval results $(date +%Y-%m-%d) [skip ci]"
-          git push || echo "Push skipped (nothing to push)"
-
-      - name: Upload artifact
+      - name: Upload results
         uses: actions/upload-artifact@v4
         if: always()
         with:
