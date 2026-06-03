@@ -45,7 +45,7 @@ export class StreamingTextDirective implements OnChanges {
         this.renderer.setStyle(this.cursor, 'color', 'var(--color-text-secondary)');
         this.renderer.setStyle(this.cursor, 'font-weight', '300');
       }
-      host.appendChild(this.cursor);
+      if (this.cursor) host.appendChild(this.cursor);
     } else if (this.cursor && host.contains(this.cursor)) {
       host.removeChild(this.cursor);
       this.cursor = null;

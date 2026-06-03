@@ -230,8 +230,8 @@ export class ChatComponent {
     setTimeout(() => this.scrollToBottom(), 50);
   }
 
-  onEnterKey(event: KeyboardEvent): void {
-    if (!event.shiftKey) {
+ onEnterKey(event: Event): void {
+  if (!(event as KeyboardEvent).shiftKey) {
       event.preventDefault();
       this.sendQuery(this.query);
     }
