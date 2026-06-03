@@ -118,17 +118,26 @@ def _compute_anomaly_score(
     1. How far the forecast deviates from the historical baseline
     2. Uncertainty width (wide CI = model is unsure = potential anomaly)
 
-    This is a heuristic — in production you'd compare against NEWS2 clinical ranges.
+    Uses a clinically meaningful minimum denominator — 2% of the baseline mean —
+    to avoid inflating scores when history has very low variance (e.g. stable SpO2).
     """
     history_arr = np.array(history)
-    baseline_mean = history_arr.mean()
-    baseline_std = history_arr.std() + 1e-8  # avoid division by zero
+    baseline_mean = float(history_arr.mean())
 
-    forecast_mean = np.mean(mean_forecast)
+    # Floor: use 2% of the mean or raw std, whichever is larger.
+    # This prevents a std of ~0 (constant history) from making any CI
+    # look "infinitely wide" and inflating the anomaly score.
+    baseline_std = float(max(history_arr.std(), baseline_mean * 0.02, 1e-8))
+
+    forecast_mean = float(np.mean(mean_forecast))
     deviation = abs(forecast_mean - baseline_mean) / baseline_std
 
-    ci_width = np.mean(np.array(high_forecast) - np.array(low_forecast))
-    normalised_ci = ci_width / (baseline_std * 4 + 1e-8)
+    ci_width = float(np.mean(np.array(high_forecast) - np.array(low_forecast)))
+
+    # Normalise CI against 10% of the baseline mean (a clinically meaningful
+    # reference range), floored at 4x std. This keeps narrow CIs low-scoring.
+    ci_denominator = max(baseline_mean * 0.10, baseline_std * 4.0, 1e-8)
+    normalised_ci = ci_width / ci_denominator
 
     # Weighted combination: 60% deviation, 40% uncertainty
     score = 0.6 * min(deviation / 3.0, 1.0) + 0.4 * min(normalised_ci, 1.0)

@@ -2,7 +2,6 @@
 Unit tests for NLI, reranker, and the health / NER API routes.
 Uses FastAPI TestClient — no real models loaded.
 """
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,26 +14,19 @@ from src.models.reranker import RankedPassage, RerankerModel, run_rerank
 # ─── NLI tests ───────────────────────────────────────────────────
 
 class TestNliVerdicts:
-    """Test verdict logic with mocked cross-encoder scores."""
-
     def _make_mock_nli_model(self, raw_scores):
-        """Return a NliModel whose cross-encoder returns fixed scores."""
         from src.models.nli import NliModel
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [raw_scores]
         return NliModel(model=mock_ce, model_id="mock-nli")
 
     def test_high_entailment_returns_pass(self):
-        import numpy as np
-        # Raw logits that, after softmax, give ~0.85 entailment
-        # Labels order: contradiction, entailment, neutral
         model = self._make_mock_nli_model([0.1, 3.0, 0.1])
         result = verify_claim(model, "SpO2 was 91%", "SpO2 recorded as 91% at 14:32")
         assert result.verdict == NliVerdict.PASS
         assert result.entailment_score > 0.70
 
     def test_low_entailment_returns_fail(self):
-        # Logits giving high contradiction, low entailment
         model = self._make_mock_nli_model([3.0, 0.1, 0.1])
         result = verify_claim(model, "BP was normal", "BP was 180/110 — critically elevated")
         assert result.verdict == NliVerdict.FAIL
@@ -56,8 +48,9 @@ class TestNliVerdicts:
 
 class TestReranker:
     def _make_mock_reranker(self, scores: list[float]) -> RerankerModel:
-        from sentence_transformers import CrossEncoder
-        mock_ce = MagicMock(spec=CrossEncoder)
+        # FIX: do NOT use spec=CrossEncoder — CrossEncoder is itself a MagicMock
+        # (mocked by conftest.py), and you cannot spec a Mock object
+        mock_ce = MagicMock()
         mock_ce.predict.return_value = scores
         return RerankerModel(model=mock_ce, model_id="mock-reranker")
 
@@ -80,7 +73,6 @@ class TestReranker:
         scores = [0.1, 0.9, 0.5]
         model = self._make_mock_reranker(scores)
         results = run_rerank(model, "q", passages, top_k=3)
-        # Top result should be index 1 ("high")
         assert results[0].original_index == 1
         assert results[0].passage == "high"
 
@@ -152,7 +144,7 @@ class TestNerRoute:
 
     def test_ner_empty_text_returns_400(self, client):
         response = client.post("/ner", json={"text": ""})
-        assert response.status_code == 422  # Pydantic min_length validation
+        assert response.status_code == 422
 
     def test_ner_too_long_text_returns_422(self, client):
         response = client.post("/ner", json={"text": "x" * 5000})
