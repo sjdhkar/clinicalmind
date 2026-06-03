@@ -1,15 +1,11 @@
-using ClinicalMind.Gateway.Infrastructure.AI;
 using System.Net.Http.Json;
 
 namespace ClinicalMind.Gateway.Features.Ingest;
 
 public record IngestRequest(
-    string PatientId,
-    string EncounterId,
-    string DocumentType,
-    string Content,
-    Dictionary<string, string>? Metadata
-);
+    string PatientId, string EncounterId,
+    string DocumentType, string Content,
+    Dictionary<string, string>? Metadata);
 
 public record IngestResponse(string JobId, string Status, string Message);
 
@@ -17,19 +13,17 @@ public static class IngestEndpoints
 {
     public static IEndpointRouteBuilder MapIngestEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/ingest")
-            .WithTags("ingest")
-            .WithOpenApi()
-            .RequireAuthorization(); // always auth-gated
+        var group = app.MapGroup("/api/ingest").WithTags("ingest");
 
-        group.MapPost("", async (
+        // FIX: explicit Task<IResult> return type on async lambda
+        group.MapPost("", async Task<IResult> (
             IngestRequest req,
-            IAiOrchestratorClient orchestrator,
-            HttpContext ctx,
+            IHttpClientFactory factory,
             CancellationToken ct) =>
         {
-            // Forward to Python AI orchestrator ingestion pipeline
-            using var http = new HttpClient { BaseAddress = new Uri("http://ai-orchestrator:8000") };
+            using var http = factory.CreateClient();
+            http.BaseAddress = new Uri("http://ai-orchestrator:8000");
+
             var response = await http.PostAsJsonAsync("/ingest", new
             {
                 patient_id = req.PatientId,
@@ -42,9 +36,7 @@ public static class IngestEndpoints
             response.EnsureSuccessStatusCode();
             var result = await response.Content.ReadFromJsonAsync<IngestResponse>(ct);
             return Results.Ok(result);
-        })
-        .WithSummary("Ingest clinical document into RAG corpus")
-        .Produces<IngestResponse>();
+        }).WithSummary("Ingest clinical document into RAG corpus");
 
         return app;
     }

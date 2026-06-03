@@ -1,10 +1,6 @@
 /**
  * StreamingTextDirective — renders AI response tokens progressively.
- *
  * Usage: <p [appStreamText]="message.content" [isStreaming]="message.streaming">
- *
- * When isStreaming=true: shows blinking cursor after last token.
- * When isStreaming=false: removes cursor, response is complete.
  */
 import {
   Directive, ElementRef, Input, OnChanges, SimpleChanges, Renderer2,
@@ -25,27 +21,27 @@ export class StreamingTextDirective implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     const host: HTMLElement = this.el.nativeElement;
 
-    // Update text content
     if (changes['content']) {
-      // Preserve cursor element, update text before it
+      // Remove cursor before updating text
       if (this.cursor && host.contains(this.cursor)) {
         host.removeChild(this.cursor);
       }
       host.textContent = this.content;
     }
 
-    // Show or hide blinking cursor
     if (this.isStreaming) {
       if (!this.cursor) {
-        this.cursor = this.renderer.createElement('span');
+        this.cursor = this.renderer.createElement('span') as HTMLElement;
         this.renderer.addClass(this.cursor, 'streaming-cursor');
         this.renderer.setProperty(this.cursor, 'textContent', '▊');
         this.renderer.setStyle(this.cursor, 'animation', 'blink 1s step-end infinite');
-        this.renderer.setStyle(this.cursor, 'opacity', '1');
         this.renderer.setStyle(this.cursor, 'color', 'var(--color-text-secondary)');
-        this.renderer.setStyle(this.cursor, 'font-weight', '300');
       }
-      if (this.cursor) host.appendChild(this.cursor);
+      // FIX: null-guard before appendChild — cursor is guaranteed non-null here
+      // but TypeScript can't prove it from the assignment above without assertion
+      if (this.cursor) {
+        host.appendChild(this.cursor);
+      }
     } else if (this.cursor && host.contains(this.cursor)) {
       host.removeChild(this.cursor);
       this.cursor = null;

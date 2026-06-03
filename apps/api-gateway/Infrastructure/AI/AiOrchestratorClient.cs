@@ -20,16 +20,9 @@ public interface IAiOrchestratorClient
 public class AiOrchestratorClient(HttpClient http, ILogger<AiOrchestratorClient> logger)
     : IAiOrchestratorClient
 {
-    /// <summary>
-    /// Proxy SSE stream from Python AI orchestrator to the caller.
-    /// Forwards each SSE line as-is — the gateway is transparent here.
-    /// </summary>
     public async IAsyncEnumerable<string> StreamChatAsync(
-        string query,
-        string patientId,
-        string encounterId,
-        string userId,
-        string traceId,
+        string query, string patientId, string encounterId,
+        string userId, string traceId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var payload = new
@@ -49,7 +42,10 @@ public class AiOrchestratorClient(HttpClient http, ILogger<AiOrchestratorClient>
                 "application/json"),
         };
 
+        // ── FIX: cannot yield inside catch — capture error, yield after ──
         HttpResponseMessage? response = null;
+        Exception? connectionError = null;
+
         try
         {
             response = await http.SendAsync(
@@ -61,35 +57,31 @@ public class AiOrchestratorClient(HttpClient http, ILogger<AiOrchestratorClient>
         catch (Exception ex)
         {
             logger.LogError(ex, "[{TraceId}] AI orchestrator connection failed", traceId);
+            connectionError = ex;
+        }
+
+        // Yield error outside catch block — C# language requirement
+        if (connectionError != null)
+        {
             yield return $"event: error\ndata: {{\"message\": \"AI service unavailable\"}}\n\n";
             yield break;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var stream = await response!.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
 
         while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
             if (line is null) break;
-
-            // Forward SSE lines directly — client handles parsing
             yield return line + "\n";
-
-            // Flush at end of SSE event (empty line delimiter)
-            if (line.Length == 0)
-                yield return "\n";
+            if (line.Length == 0) yield return "\n";
         }
     }
 
-    /// <summary>Non-streaming chat for programmatic use.</summary>
     public async Task<ChatResult> ChatAsync(
-        string query,
-        string patientId,
-        string encounterId,
-        string userId,
-        string traceId,
-        CancellationToken cancellationToken)
+        string query, string patientId, string encounterId,
+        string userId, string traceId, CancellationToken cancellationToken)
     {
         var payload = new
         {
@@ -115,9 +107,6 @@ public class AiOrchestratorClient(HttpClient http, ILogger<AiOrchestratorClient>
     }
 
     private record OrchestratorChatResponse(
-        string Answer,
-        string TraceId,
-        string ModelUsed,
-        int CitationCount,
-        bool InsufficientData);
+        string Answer, string TraceId, string ModelUsed,
+        int CitationCount, bool InsufficientData);
 }

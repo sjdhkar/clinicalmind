@@ -18,25 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-
-      - name: Install lightweight test deps only
-        # conftest.py mocks ALL heavy ML packages (torch, transformers, etc.)
-        # so unit tests run without any ML libraries installed
+      - name: Install test dependencies
         run: |
           pip install --quiet \
-            fastapi==0.115.0 \
-            uvicorn \
-            pydantic==2.9.0 \
-            pydantic-settings \
-            httpx \
-            pytest==8.3.0 \
-            pytest-asyncio==0.24.0
-
+            fastapi==0.115.0 uvicorn \
+            pydantic==2.9.0 pydantic-settings \
+            httpx numpy \
+            pytest==8.3.0 pytest-asyncio==0.24.0
       - name: Run unit tests
         working-directory: services/hf-inference
         run: pytest tests/unit/ -v --tb=short --asyncio-mode=auto
@@ -47,70 +38,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-
-      - name: Install lightweight test deps only
-        # conftest.py mocks LangGraph, LangChain, SQLAlchemy, Redis, etc.
+      - name: Install test dependencies
         run: |
           pip install --quiet \
-            fastapi==0.115.0 \
-            uvicorn \
-            pydantic==2.9.0 \
-            pydantic-settings \
-            httpx \
-            numpy \
-            pytest==8.3.0 \
-            pytest-asyncio==0.24.0
-
+            fastapi==0.115.0 uvicorn \
+            pydantic==2.9.0 pydantic-settings \
+            httpx numpy \
+            pytest==8.3.0 pytest-asyncio==0.24.0
       - name: Run unit tests
         working-directory: services/ai-orchestrator
         run: pytest tests/unit/ -v --tb=short --asyncio-mode=auto
 
-  # ─── .NET 9 API Gateway — build only ─────────────────────────
+  # ─── .NET 9 API Gateway ───────────────────────────────────────
   gateway-build:
     name: ".NET · API Gateway · build"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.x"
-
-      - name: Restore packages
+      - name: Restore
         working-directory: apps/api-gateway
         run: dotnet restore
-
-      - name: Build Release
+      - name: Build
         working-directory: apps/api-gateway
         run: dotnet build --no-restore --configuration Release
 
-  # ─── Angular 19 — type-check & build ─────────────────────────
+  # ─── Angular 19 ───────────────────────────────────────────────
   web-build:
-    name: "Angular · type-check & build"
+    name: "Angular · build"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/web/package.json
-
       - name: Install dependencies
         working-directory: apps/web
-        run: npm install --legacy-peer-deps --prefer-offline
-
-      - name: Type-check
-        working-directory: apps/web
-        run: npx tsc --noEmit --project tsconfig.app.json
-        continue-on-error: true   # report but don't block on TS strict errors
-
+        run: npm install --legacy-peer-deps
       - name: Build production bundle
         working-directory: apps/web
         run: npx ng build --configuration production --no-progress

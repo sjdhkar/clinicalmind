@@ -11,12 +11,9 @@ using OpenTelemetry.Trace;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// ── Configuration ─────────────────────────────────────────────
 var config = builder.Configuration;
 
-// ── Authentication (Azure AD B2C) ─────────────────────────────
-// Bypassed in dev when AuthBypassDev=true (see appsettings.Development.json)
+// ── Authentication ─────────────────────────────────────────────
 if (!config.GetValue<bool>("Auth:BypassDev"))
 {
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -28,27 +25,27 @@ if (!config.GetValue<bool>("Auth:BypassDev"))
     builder.Services.AddAuthorization();
 }
 
-// ── MediatR (CQRS) ────────────────────────────────────────────
+// ── MediatR ────────────────────────────────────────────────────
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
-// ── Redis ────────────────────────────────────────────────────
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+// ── Redis ──────────────────────────────────────────────────────
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(config.GetConnectionString("Redis") ?? "localhost:6379"));
 builder.Services.AddSingleton<IRateLimiter, RedisTokenBucketLimiter>();
 
-// ── Database (audit log) ──────────────────────────────────────
+// ── Database (audit log) ───────────────────────────────────────
 builder.Services.AddDbContext<AuditDbContext>(options =>
     options.UseNpgsql(config.GetConnectionString("Default")));
 
-// ── AI Orchestrator client ────────────────────────────────────
+// ── AI Orchestrator HTTP client ────────────────────────────────
 builder.Services.AddHttpClient<IAiOrchestratorClient, AiOrchestratorClient>(client =>
 {
     client.BaseAddress = new Uri(config["AiOrchestrator:BaseUrl"] ?? "http://ai-orchestrator:8000");
-    client.Timeout = TimeSpan.FromSeconds(120); // SSE streams can be long
+    client.Timeout = TimeSpan.FromSeconds(120);
 });
 
-// ── OpenTelemetry ─────────────────────────────────────────────
+// ── OpenTelemetry ──────────────────────────────────────────────
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(r => r.AddService("clinicalmind-gateway"))
     .WithTracing(tracing => tracing
@@ -57,20 +54,17 @@ builder.Services.AddOpenTelemetry()
         .AddOtlpExporter(o => o.Endpoint = new Uri(
             config["Otel:Endpoint"] ?? "http://localhost:4317")));
 
-// ── CORS (Angular dev server) ──────────────────────────────────
+// ── CORS ───────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy
         .WithOrigins("http://localhost:4200")
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials())); // required for SSE
-
-// ── Scalar API docs ───────────────────────────────────────────
-builder.Services.AddEndpointsApiExplorer();
+        .AllowCredentials()));
 
 var app = builder.Build();
 
-// ── Middleware pipeline ────────────────────────────────────────
+// ── Middleware ─────────────────────────────────────────────────
 app.UseCors();
 app.UseMiddleware<AuditLoggingMiddleware>();
 app.UseMiddleware<RateLimitingMiddleware>();
@@ -81,18 +75,12 @@ if (!config.GetValue<bool>("Auth:BypassDev"))
     app.UseAuthorization();
 }
 
-// ── API docs ──────────────────────────────────────────────────
-if (app.Environment.IsDevelopment())
-{
-    app.MapScalarApiReference();
-}
-
-// ── Endpoints ─────────────────────────────────────────────────
+// ── Endpoints ──────────────────────────────────────────────────
 app.MapHealthCheck();
 app.MapChatEndpoints();
 app.MapIngestEndpoints();
 
-// ── DB migrations ─────────────────────────────────────────────
+// ── DB init (dev only) ─────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
