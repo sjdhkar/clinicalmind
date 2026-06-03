@@ -16,6 +16,7 @@
 
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface SseEvent {
   type: 'start' | 'token' | 'citation' | 'metadata' | 'done' | 'error';
@@ -44,11 +45,12 @@ export class SseService {
    * The connection closes automatically when the Observable is unsubscribed.
    */
   connect(url: string, body: unknown): Observable<SseEvent> {
+    const fullUrl = environment.production ? `${environment.apiUrl}${url}` : url;
     return new Observable<SseEvent>(subscriber => {
       // POST + SSE requires a fetch-based approach since EventSource only supports GET
       const controller = new AbortController();
 
-      fetch(url, {
+      fetch(fullUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify(body),

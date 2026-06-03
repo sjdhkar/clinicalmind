@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AppStore, PatientRiskCard } from '../../core/state/app.store';
+import { ApiService } from '../../core/services/api.service';
 import { RiskScoreCardComponent } from '../../shared/components/risk-score-card/risk-score-card.component';
 import { ChatComponent } from '../chat/chat.component';
 
@@ -82,14 +83,17 @@ import { ChatComponent } from '../chat/chat.component';
 })
 export class WardDashboardComponent implements OnInit {
   protected readonly store = inject(AppStore);
+  protected readonly api = inject(ApiService);
   protected readonly patients = this.store.patients;
   protected readonly activePatientId = this.store.activePatientId;
-  protected readonly criticalCount = () =>
-    this.store.criticalPatients().length;
+  protected readonly criticalCount = () => this.store.criticalPatients().length;
 
   ngOnInit(): void {
-    // In production: load patients + connect SignalR for real-time risk updates
-    this.loadDemoPatients();
+    // Try loading from API first; fall back to demo data
+    this.api.getPatients().subscribe({
+      next: (patients) => this.store.setPatients(patients),
+      error: () => this.loadDemoPatients(),
+    });
   }
 
   selectPatient(patient: PatientRiskCard): void {

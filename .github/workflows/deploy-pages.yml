@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:   # allow manual trigger
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build Angular + Deploy to Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install --legacy-peer-deps
+
+      - name: Build for GitHub Pages
+        working-directory: apps/web
+        env:
+          # base-href must match repo name for GitHub Pages project sites
+          BASE_HREF: /clinicalmind/
+        run: |
+          npx ng build --configuration production \
+            --base-href $BASE_HREF \
+            --no-progress
+
+      - name: Add 404.html for Angular routing
+        # GitHub Pages serves 404 for direct URL access — this redirects to index.html
+        run: cp apps/web/dist/clinicalmind-web/browser/index.html \
+                apps/web/dist/clinicalmind-web/browser/404.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist/clinicalmind-web/browser
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

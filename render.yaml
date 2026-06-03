@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: clinicalmind-demo-api
+    runtime: python
+    rootDir: services/demo-api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false   # set manually in Render dashboard
+      - key: AZURE_OPENAI_KEY
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT
+        value: gpt-4o-mini
+      - key: AZURE_OPENAI_API_VERSION
+        value: "2024-08-01-preview"
+    plan: free
