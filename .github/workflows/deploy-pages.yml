@@ -47,10 +47,7 @@ jobs:
             --no-progress
 
       - name: Add 404.html for Angular routing
-        # GitHub Pages serves 404 for direct URL access — this redirects to index.html
-        run: cp apps/web/dist/clinicalmind-web/browser/index.html \
-                apps/web/dist/clinicalmind-web/browser/404.html
-
+        run: cp apps/web/dist/clinicalmind-web/browser/index.html apps/web/dist/clinicalmind-web/browser/404.html
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
